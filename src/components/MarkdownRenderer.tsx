@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 const components: Components = {
   h1: ({ node, children, ...props }) => (
     <h1
-      className="text-4xl font-[var(--font-orbitron)] font-black tracking-widest border-b border-orange-500/30 pb-4
+      className="text-2xl sm:text-4xl font-[var(--font-orbitron)] font-black tracking-widest border-b border-orange-500/30 pb-4
                  bg-gradient-to-r from-orange-400 via-rose-500 to-fuchsia-500
                  bg-clip-text text-transparent"
       {...props}
@@ -16,7 +16,7 @@ const components: Components = {
   ),
   h2: ({ node, children, ...props }) => (
     <h2
-      className="text-2xl font-[var(--font-orbitron)] font-semibold tracking-wide uppercase mt-12
+      className="text-xl sm:text-2xl font-[var(--font-orbitron)] font-semibold tracking-wide uppercase mt-8 sm:mt-12
                  bg-gradient-to-r from-orange-300 via-pink-500 to-fuchsia-400
                  bg-clip-text text-transparent"
       {...props}
@@ -26,13 +26,26 @@ const components: Components = {
   ),
   h3: ({ node, children, ...props }) => (
     <h3
-      className="text-xl font-[var(--font-orbitron)] font-medium tracking-wide
+      className="text-lg sm:text-xl font-[var(--font-orbitron)] font-medium tracking-wide
                  bg-gradient-to-r from-amber-400 via-orange-500 to-rose-500
                  bg-clip-text text-transparent"
       {...props}
     >
       {children}
     </h3>
+  ),
+  table: ({ node, children, ...props }) => (
+    <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+      <table {...props}>{children}</table>
+    </div>
+  ),
+  pre: ({ node, children, ...props }) => (
+    <pre
+      className="overflow-x-auto bg-zinc-900/80 border border-zinc-800 rounded-lg p-3 sm:p-4 text-xs sm:text-sm backdrop-blur-sm"
+      {...props}
+    >
+      {children}
+    </pre>
   ),
 };
 

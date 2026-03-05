@@ -10,7 +10,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <AgenticPathways />
-      <div className="relative z-10 mx-auto max-w-4xl px-6 py-16">
+      <div className="relative z-10 mx-auto max-w-4xl px-3 py-8 sm:px-6 sm:py-16">
         <MarkdownRenderer content={content} />
       </div>
     </div>

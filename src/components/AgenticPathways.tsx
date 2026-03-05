@@ -5,12 +5,13 @@ import { useRef, useEffect } from "react";
 interface MindNode {
   x: number;
   y: number;
-  radius: number;       // visible circle size — hubs are bigger
-  connections: number[];
+  radius: number;
+  children: number[];
+  parent: number;
   hue: number;
+  branchHue: number; // inherited color from the branch family
   pulsePhase: number;
   depth: number;
-  isHub: boolean;
 }
 
 interface Agent {
@@ -19,179 +20,217 @@ interface Agent {
   progress: number;
   speed: number;
   hue: number;
-  matched: boolean;
-  matchTimer: number;
 }
 
-const TRON_HUES = [180, 300, 270, 140, 30];
+const BRANCH_HUES = [180, 30, 300, 140, 270, 50, 330, 200]; // cyan, orange, magenta, green, purple, gold, pink, teal
 
-function randomHue(): number {
-  return TRON_HUES[Math.floor(Math.random() * TRON_HUES.length)] + (Math.random() - 0.5) * 20;
-}
+function buildMindMapTree(
+  rootX: number,
+  rootY: number,
+  rootAngle: number, // general direction this tree grows toward
+  branchHues: number[],
+  nodes: MindNode[],
+  isMobile: boolean
+) {
+  const rootIdx = nodes.length;
 
-function buildMindMap(w: number, h: number, isMobile: boolean): MindNode[] {
-  const nodes: MindNode[] = [];
-  const hubCount = isMobile ? 5 : 8;
-  const branchCount = isMobile ? 3 : 5; // branches per hub
-  const leafCount = isMobile ? 2 : 3;   // leaves per branch
+  nodes.push({
+    x: rootX,
+    y: rootY,
+    radius: isMobile ? 7 : 10,
+    children: [],
+    parent: -1,
+    hue: 0, // white-ish root
+    branchHue: 0,
+    pulsePhase: Math.random() * Math.PI * 2,
+    depth: 0,
+  });
 
-  // Spread hubs across the canvas
-  for (let i = 0; i < hubCount; i++) {
-    const angle = (i / hubCount) * Math.PI * 2 + Math.random() * 0.4;
-    const radiusFromCenter = Math.min(w, h) * (0.2 + Math.random() * 0.25);
+  const primaryCount = isMobile ? 3 : 4 + Math.floor(Math.random() * 2);
+  const angleSpread = Math.PI * 0.8; // how wide branches fan out
+  const startAngle = rootAngle - angleSpread / 2;
+
+  for (let i = 0; i < primaryCount; i++) {
+    const angle = startAngle + (i / (primaryCount - 1 || 1)) * angleSpread;
+    const dist = (isMobile ? 70 : 100) + Math.random() * 40;
+    const hue = branchHues[i % branchHues.length];
+    const primaryIdx = nodes.length;
+
     nodes.push({
-      x: w / 2 + Math.cos(angle) * radiusFromCenter + (Math.random() - 0.5) * 80,
-      y: h / 2 + Math.sin(angle) * radiusFromCenter + (Math.random() - 0.5) * 80,
-      radius: isMobile ? 6 : 8,
-      connections: [],
-      hue: randomHue(),
+      x: rootX + Math.cos(angle) * dist,
+      y: rootY + Math.sin(angle) * dist,
+      radius: isMobile ? 4.5 : 6,
+      children: [],
+      parent: rootIdx,
+      hue,
+      branchHue: hue,
       pulsePhase: Math.random() * Math.PI * 2,
-      depth: 0,
-      isHub: true,
+      depth: 1,
     });
-  }
+    nodes[rootIdx].children.push(primaryIdx);
 
-  // For each hub, create branches radiating outward
-  for (let hi = 0; hi < hubCount; hi++) {
-    const hub = nodes[hi];
-    const branchAngleBase = Math.random() * Math.PI * 2;
+    // Secondary branches
+    const secCount = 2 + Math.floor(Math.random() * 2);
+    const secSpread = Math.PI * 0.5;
+    const secStart = angle - secSpread / 2;
 
-    for (let bi = 0; bi < branchCount; bi++) {
-      const angle = branchAngleBase + (bi / branchCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
-      const dist = 60 + Math.random() * 80;
-      const branchIdx = nodes.length;
+    for (let j = 0; j < secCount; j++) {
+      const secAngle = secStart + (j / (secCount - 1 || 1)) * secSpread;
+      const secDist = (isMobile ? 45 : 65) + Math.random() * 30;
+      const secIdx = nodes.length;
 
       nodes.push({
-        x: hub.x + Math.cos(angle) * dist,
-        y: hub.y + Math.sin(angle) * dist,
-        radius: isMobile ? 3.5 : 4.5,
-        connections: [],
-        hue: hub.hue + (Math.random() - 0.5) * 40,
+        x: nodes[primaryIdx].x + Math.cos(secAngle) * secDist,
+        y: nodes[primaryIdx].y + Math.sin(secAngle) * secDist,
+        radius: isMobile ? 3 : 4,
+        children: [],
+        parent: primaryIdx,
+        hue: hue + (Math.random() - 0.5) * 20,
+        branchHue: hue,
         pulsePhase: Math.random() * Math.PI * 2,
-        depth: 1,
-        isHub: false,
+        depth: 2,
       });
+      nodes[primaryIdx].children.push(secIdx);
 
-      // Connect branch to hub
-      nodes[hi].connections.push(branchIdx);
-      nodes[branchIdx].connections.push(hi);
+      // Tertiary leaves
+      const leafCount = 1 + Math.floor(Math.random() * 2);
+      const leafSpread = Math.PI * 0.4;
+      const leafStart = secAngle - leafSpread / 2;
 
-      // Add leaves off each branch
-      for (let li = 0; li < leafCount; li++) {
-        const leafAngle = angle + (Math.random() - 0.5) * 1.2;
-        const leafDist = 35 + Math.random() * 50;
+      for (let k = 0; k < leafCount; k++) {
+        const leafAngle = leafStart + (k / (leafCount - 1 || 1)) * leafSpread + (Math.random() - 0.5) * 0.2;
+        const leafDist = (isMobile ? 30 : 45) + Math.random() * 20;
         const leafIdx = nodes.length;
 
         nodes.push({
-          x: nodes[branchIdx].x + Math.cos(leafAngle) * leafDist,
-          y: nodes[branchIdx].y + Math.sin(leafAngle) * leafDist,
+          x: nodes[secIdx].x + Math.cos(leafAngle) * leafDist,
+          y: nodes[secIdx].y + Math.sin(leafAngle) * leafDist,
           radius: 2 + Math.random() * 1.5,
-          connections: [],
-          hue: nodes[branchIdx].hue + (Math.random() - 0.5) * 30,
+          children: [],
+          parent: secIdx,
+          hue: hue + (Math.random() - 0.5) * 30,
+          branchHue: hue,
           pulsePhase: Math.random() * Math.PI * 2,
-          depth: 2,
-          isHub: false,
+          depth: 3,
         });
-
-        nodes[branchIdx].connections.push(leafIdx);
-        nodes[leafIdx].connections.push(branchIdx);
+        nodes[secIdx].children.push(leafIdx);
       }
     }
   }
+}
 
-  // Cross-connect some hubs to each other
-  for (let i = 0; i < hubCount; i++) {
-    for (let j = i + 1; j < hubCount; j++) {
-      const dx = nodes[i].x - nodes[j].x;
-      const dy = nodes[i].y - nodes[j].y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < (isMobile ? 300 : 400) && Math.random() < 0.5) {
-        nodes[i].connections.push(j);
-        nodes[j].connections.push(i);
-      }
-    }
+function buildFullMindMap(w: number, h: number, isMobile: boolean): MindNode[] {
+  const nodes: MindNode[] = [];
+
+  // Place several mind-map trees across the canvas
+  const trees = isMobile
+    ? [
+        { x: w * 0.25, y: h * 0.3, angle: Math.PI * 0.8 },
+        { x: w * 0.75, y: h * 0.5, angle: Math.PI * 1.2 },
+        { x: w * 0.4, y: h * 0.75, angle: Math.PI * 0.3 },
+      ]
+    : [
+        { x: w * 0.15, y: h * 0.25, angle: Math.PI * 0.3 },
+        { x: w * 0.5, y: h * 0.15, angle: Math.PI * 0.55 },
+        { x: w * 0.85, y: h * 0.3, angle: Math.PI * 0.75 },
+        { x: w * 0.2, y: h * 0.7, angle: -Math.PI * 0.3 },
+        { x: w * 0.55, y: h * 0.8, angle: -Math.PI * 0.2 },
+        { x: w * 0.82, y: h * 0.72, angle: Math.PI * 1.1 },
+      ];
+
+  for (let i = 0; i < trees.length; i++) {
+    const t = trees[i];
+    // Each tree gets a rotated set of branch hues
+    const hues = BRANCH_HUES.slice(i % BRANCH_HUES.length).concat(BRANCH_HUES.slice(0, i % BRANCH_HUES.length));
+    buildMindMapTree(t.x, t.y, t.angle, hues, nodes, isMobile);
   }
 
-  // Cross-connect some branches between different hubs
-  const branches = nodes.map((n, i) => ({ n, i })).filter(({ n }) => n.depth === 1);
-  for (let i = 0; i < branches.length; i++) {
-    for (let j = i + 1; j < branches.length; j++) {
-      const dx = branches[i].n.x - branches[j].n.x;
-      const dy = branches[i].n.y - branches[j].n.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      if (dist < 150 && Math.random() < 0.25) {
-        nodes[branches[i].i].connections.push(branches[j].i);
-        nodes[branches[j].i].connections.push(branches[i].i);
-      }
-    }
-  }
-
-  // Clamp nodes to canvas bounds
+  // Clamp to canvas
   for (const node of nodes) {
-    node.x = Math.max(node.radius + 5, Math.min(w - node.radius - 5, node.x));
-    node.y = Math.max(node.radius + 5, Math.min(h - node.radius - 5, node.y));
+    node.x = Math.max(node.radius + 2, Math.min(w - node.radius - 2, node.x));
+    node.y = Math.max(node.radius + 2, Math.min(h - node.radius - 2, node.y));
   }
 
   return nodes;
+}
+
+// Get all edges (parent→child) for traversal
+function getAllEdges(nodes: MindNode[]): { from: number; to: number }[] {
+  const edges: { from: number; to: number }[] = [];
+  for (let i = 0; i < nodes.length; i++) {
+    for (const child of nodes[i].children) {
+      edges.push({ from: i, to: child });
+      edges.push({ from: child, to: i }); // agents can travel both ways
+    }
+  }
+  return edges;
+}
+
+function getNeighbors(node: MindNode, idx: number, nodes: MindNode[]): number[] {
+  const neighbors = [...node.children];
+  if (node.parent >= 0) neighbors.push(node.parent);
+  return neighbors;
 }
 
 function createAgents(count: number, nodes: MindNode[]): Agent[] {
   const agents: Agent[] = [];
   for (let i = 0; i < count; i++) {
     const fromNode = Math.floor(Math.random() * nodes.length);
-    const conns = nodes[fromNode].connections;
-    const toNode = conns.length > 0
-      ? conns[Math.floor(Math.random() * conns.length)]
+    const neighbors = getNeighbors(nodes[fromNode], fromNode, nodes);
+    const toNode = neighbors.length > 0
+      ? neighbors[Math.floor(Math.random() * neighbors.length)]
       : (fromNode + 1) % nodes.length;
     agents.push({
       fromNode,
       toNode,
       progress: Math.random(),
-      speed: 0.006 + Math.random() * 0.01,
-      hue: randomHue(),
-      matched: false,
-      matchTimer: 0,
+      speed: 0.005 + Math.random() * 0.01,
+      hue: nodes[fromNode].branchHue || BRANCH_HUES[Math.floor(Math.random() * BRANCH_HUES.length)],
     });
   }
   return agents;
 }
 
-// Draw a curved connection between two nodes (bezier curve)
-function drawConnection(ctx: CanvasRenderingContext2D, a: MindNode, b: MindNode, alpha: number) {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  // Perpendicular offset for curve
-  const offset = Math.sqrt(dx * dx + dy * dy) * 0.15;
-  const cx = mx + (-dy / Math.sqrt(dx * dx + dy * dy + 1)) * offset;
-  const cy = my + (dx / Math.sqrt(dx * dx + dy * dy + 1)) * offset;
+// Smooth curved branch line from parent to child
+function drawBranch(ctx: CanvasRenderingContext2D, parent: MindNode, child: MindNode, alpha: number, lineWidth: number) {
+  // Control point: go straight out from parent, then curve to child
+  const dx = child.x - parent.x;
+  const dy = child.y - parent.y;
 
-  const avgHue = (a.hue + b.hue) / 2;
-  ctx.strokeStyle = `hsla(${avgHue}, 70%, 45%, ${alpha})`;
-  ctx.lineWidth = 0.6;
+  // The curve bows outward — control point is offset perpendicular to the midpoint
+  const mx = parent.x + dx * 0.5;
+  const my = parent.y + dy * 0.5;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const perpX = -dy / len;
+  const perpY = dx / len;
+  const bow = len * 0.12; // gentle curve
+
+  const cx = mx + perpX * bow;
+  const cy = my + perpY * bow;
+
+  ctx.strokeStyle = `hsla(${child.branchHue}, 70%, 45%, ${alpha})`;
+  ctx.lineWidth = Math.min(lineWidth, 1);
+  ctx.lineCap = "round";
   ctx.beginPath();
-  ctx.moveTo(a.x, a.y);
-  ctx.quadraticCurveTo(cx, cy, b.x, b.y);
+  ctx.moveTo(parent.x, parent.y);
+  ctx.quadraticCurveTo(cx, cy, child.x, child.y);
   ctx.stroke();
 }
 
-// Get position along the curved path at progress t
-function getCurvePoint(a: MindNode, b: MindNode, t: number): { x: number; y: number } {
-  const mx = (a.x + b.x) / 2;
-  const my = (a.y + b.y) / 2;
-  const dx = b.x - a.x;
-  const dy = b.y - a.y;
-  const dist = Math.sqrt(dx * dx + dy * dy + 1);
-  const offset = dist * 0.15;
-  const cx = mx + (-dy / dist) * offset;
-  const cy = my + (dx / dist) * offset;
+function getCurvePos(parent: MindNode, child: MindNode, t: number): { x: number; y: number } {
+  const dx = child.x - parent.x;
+  const dy = child.y - parent.y;
+  const mx = parent.x + dx * 0.5;
+  const my = parent.y + dy * 0.5;
+  const len = Math.sqrt(dx * dx + dy * dy) || 1;
+  const bow = len * 0.12;
+  const cx = mx + (-dy / len) * bow;
+  const cy = my + (dx / len) * bow;
 
-  // Quadratic bezier: (1-t)^2*P0 + 2(1-t)t*C + t^2*P1
   const u = 1 - t;
   return {
-    x: u * u * a.x + 2 * u * t * cx + t * t * b.x,
-    y: u * u * a.y + 2 * u * t * cy + t * t * b.y,
+    x: u * u * parent.x + 2 * u * t * cx + t * t * child.x,
+    y: u * u * parent.y + 2 * u * t * cy + t * t * child.y,
   };
 }
 
@@ -209,7 +248,7 @@ export function AgenticPathways() {
     let frameCount = 0;
 
     const isMobile = window.innerWidth < 768;
-    const agentCount = isMobile ? 80 : 180;
+    const agentCount = isMobile ? 60 : 150;
 
     function resize() {
       const dpr = window.devicePixelRatio || 1;
@@ -224,7 +263,7 @@ export function AgenticPathways() {
 
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const nodes = buildMindMap(w, h, isMobile);
+    const nodes = buildFullMindMap(w, h, isMobile);
     const agents = createAgents(agentCount, nodes);
 
     let paused = false;
@@ -234,81 +273,75 @@ export function AgenticPathways() {
     }
     document.addEventListener("visibilitychange", handleVisibility);
 
+    function drawStaticFrame() {
+      // Full opaque clear for static
+      ctx!.fillStyle = "rgb(9, 9, 11)";
+      ctx!.fillRect(0, 0, w, h);
+
+      // Draw branches
+      for (let i = 0; i < nodes.length; i++) {
+        for (const childIdx of nodes[i].children) {
+          const lineW = nodes[i].depth === 0 ? 1.8 : nodes[i].depth === 1 ? 1.2 : 0.7;
+          drawBranch(ctx!, nodes[i], nodes[childIdx], 0.12, lineW);
+        }
+      }
+
+      // Draw nodes
+      for (const node of nodes) {
+        ctx!.strokeStyle = `hsla(${node.branchHue || 200}, 70%, 50%, 0.2)`;
+        ctx!.lineWidth = node.depth === 0 ? 1 : 0.5;
+        ctx!.beginPath();
+        ctx!.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
+        ctx!.stroke();
+
+        ctx!.fillStyle = `hsla(${node.branchHue || 200}, 80%, 55%, 0.1)`;
+        ctx!.beginPath();
+        ctx!.arc(node.x, node.y, node.radius * 0.5, 0, Math.PI * 2);
+        ctx!.fill();
+      }
+    }
+
     function loop() {
       if (paused) return;
       const cw = window.innerWidth;
       const ch = window.innerHeight;
 
-      // Clear with slight persistence for subtle glow trails
       ctx!.globalCompositeOperation = "source-over";
-      ctx!.fillStyle = "rgba(9, 9, 11, 0.25)";
+      ctx!.fillStyle = "rgb(9, 9, 11)";
       ctx!.fillRect(0, 0, cw, ch);
 
       frameCount++;
 
-      // --- Draw curved connections ---
-      ctx!.globalCompositeOperation = "source-over";
+      // --- Draw branches as thin colored curves ---
       for (let i = 0; i < nodes.length; i++) {
-        for (const j of nodes[i].connections) {
-          if (j <= i) continue;
-          drawConnection(ctx!, nodes[i], nodes[j], 0.07);
+        const node = nodes[i];
+        for (const childIdx of node.children) {
+          const lineW = node.depth === 0 ? 1 : 0.5;
+          const alpha = node.depth === 0 ? 0.1 : node.depth === 1 ? 0.08 : 0.06;
+          drawBranch(ctx!, node, nodes[childIdx], alpha, lineW);
         }
       }
 
-      // --- Draw mind-map nodes as circles with rings ---
+      // --- Draw mind-map nodes as clean circles ---
       for (const node of nodes) {
-        const pulse = Math.sin(frameCount * 0.025 + node.pulsePhase) * 0.08 + 0.18;
+        const pulse = Math.sin(frameCount * 0.02 + node.pulsePhase) * 0.06 + 0.16;
+        const hue = node.depth === 0 ? 200 : node.branchHue;
 
-        // Outer ring (stroke)
-        ctx!.strokeStyle = `hsla(${node.hue}, 80%, 50%, ${pulse * 0.7})`;
-        ctx!.lineWidth = node.isHub ? 1.2 : 0.6;
+        // Circle outline
+        ctx!.strokeStyle = `hsla(${hue}, 70%, 50%, ${pulse * 0.8})`;
+        ctx!.lineWidth = node.depth === 0 ? 1 : 0.5;
         ctx!.beginPath();
         ctx!.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
         ctx!.stroke();
 
-        // Inner fill
-        ctx!.fillStyle = `hsla(${node.hue}, 100%, 55%, ${pulse * 0.4})`;
+        // Soft fill
+        ctx!.fillStyle = `hsla(${hue}, 80%, 55%, ${pulse * 0.3})`;
         ctx!.beginPath();
-        ctx!.arc(node.x, node.y, node.radius * 0.6, 0, Math.PI * 2);
-        ctx!.fill();
-
-        // Center dot
-        ctx!.fillStyle = `hsla(${node.hue}, 100%, 70%, ${pulse + 0.1})`;
-        ctx!.beginPath();
-        ctx!.arc(node.x, node.y, node.isHub ? 1.5 : 0.8, 0, Math.PI * 2);
+        ctx!.arc(node.x, node.y, node.radius * 0.5, 0, Math.PI * 2);
         ctx!.fill();
       }
 
-      // --- Check for agent matches at nodes ---
-      const arrivals: Map<number, number[]> = new Map();
-      for (let ai = 0; ai < agents.length; ai++) {
-        if (agents[ai].progress >= 0.9) {
-          const dest = agents[ai].toNode;
-          if (!arrivals.has(dest)) arrivals.set(dest, []);
-          arrivals.get(dest)!.push(ai);
-        }
-      }
-      for (const [nodeIdx, arr] of arrivals) {
-        if (arr.length >= 2) {
-          for (const ai of arr) {
-            agents[ai].matched = true;
-            agents[ai].matchTimer = 25;
-          }
-          // Flash the matching node
-          const node = nodes[nodeIdx];
-          ctx!.globalCompositeOperation = "lighter";
-          ctx!.fillStyle = `hsla(${node.hue}, 100%, 80%, 0.5)`;
-          ctx!.shadowColor = `hsla(${node.hue}, 100%, 80%, 1)`;
-          ctx!.shadowBlur = 20;
-          ctx!.beginPath();
-          ctx!.arc(node.x, node.y, node.radius + 3, 0, Math.PI * 2);
-          ctx!.fill();
-          ctx!.shadowBlur = 0;
-          ctx!.globalCompositeOperation = "source-over";
-        }
-      }
-
-      // --- Draw agents traveling along curved paths ---
+      // --- Draw agents as simple small dots traveling along branches ---
       ctx!.globalCompositeOperation = "lighter";
 
       for (const agent of agents) {
@@ -316,40 +349,28 @@ export function AgenticPathways() {
 
         const from = nodes[agent.fromNode];
         const to = nodes[agent.toNode];
-        const pos = getCurvePoint(from, to, agent.progress);
+        const pos = getCurvePos(from, to, agent.progress);
 
-        if (agent.matchTimer > 0) agent.matchTimer--;
-        if (agent.matchTimer === 0) agent.matched = false;
-
-        // Reached destination — pick next edge
         if (agent.progress >= 1) {
           agent.fromNode = agent.toNode;
-          const conns = nodes[agent.fromNode].connections;
-          if (conns.length > 0) {
-            agent.toNode = conns[Math.floor(Math.random() * conns.length)];
+          const neighbors = getNeighbors(nodes[agent.fromNode], agent.fromNode, nodes);
+          if (neighbors.length > 0) {
+            agent.toNode = neighbors[Math.floor(Math.random() * neighbors.length)];
           } else {
             agent.fromNode = Math.floor(Math.random() * nodes.length);
-            const c = nodes[agent.fromNode].connections;
-            agent.toNode = c.length > 0
-              ? c[Math.floor(Math.random() * c.length)]
+            const n = getNeighbors(nodes[agent.fromNode], agent.fromNode, nodes);
+            agent.toNode = n.length > 0
+              ? n[Math.floor(Math.random() * n.length)]
               : (agent.fromNode + 1) % nodes.length;
           }
           agent.progress = 0;
-          if (Math.random() < 0.3) agent.hue = randomHue();
+          agent.hue = nodes[agent.fromNode].branchHue || agent.hue;
         }
 
-        const brightness = agent.matched ? 85 : 65;
-        const alpha = agent.matched ? 0.9 : 0.6;
-        const r = agent.matched ? 2.5 : 1.5;
-
-        // Agent as a small glowing circle
-        ctx!.fillStyle = `hsla(${agent.hue}, 100%, ${brightness}%, ${alpha})`;
-        ctx!.shadowColor = `hsla(${agent.hue}, 100%, ${brightness}%, 0.8)`;
-        ctx!.shadowBlur = agent.matched ? 10 : 4;
+        ctx!.fillStyle = `hsla(${agent.hue}, 100%, 65%, 0.55)`;
         ctx!.beginPath();
-        ctx!.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+        ctx!.arc(pos.x, pos.y, 1.3, 0, Math.PI * 2);
         ctx!.fill();
-        ctx!.shadowBlur = 0;
       }
 
       if (!prefersReducedMotion) {
@@ -358,25 +379,7 @@ export function AgenticPathways() {
     }
 
     if (prefersReducedMotion) {
-      ctx.fillStyle = "rgb(9, 9, 11)";
-      ctx.fillRect(0, 0, w, h);
-      for (let i = 0; i < nodes.length; i++) {
-        for (const j of nodes[i].connections) {
-          if (j <= i) continue;
-          drawConnection(ctx, nodes[i], nodes[j], 0.08);
-        }
-      }
-      for (const node of nodes) {
-        ctx.strokeStyle = `hsla(${node.hue}, 80%, 50%, 0.2)`;
-        ctx.lineWidth = node.isHub ? 1.2 : 0.6;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.fillStyle = `hsla(${node.hue}, 100%, 60%, 0.15)`;
-        ctx.beginPath();
-        ctx.arc(node.x, node.y, node.radius * 0.6, 0, Math.PI * 2);
-        ctx.fill();
-      }
+      drawStaticFrame();
     } else {
       animationId = requestAnimationFrame(loop);
     }
