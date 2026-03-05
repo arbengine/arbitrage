@@ -235,9 +235,7 @@ GENESIS:      2026-03-05T01:47:57Z
 MERKLE_ROOT:  84da8014f3300d45190d26a5c0635e18704daa8320b626e7e03119308f423405
 ```
 
-See [`protocols.md`](./protocols.md) for network routing and versioning.
-
 ---
 
 **Maintainer:** `proofmdorg@gmail.com`
-**Protocol:** `arbitrage/v0.1` — part of [`protocols.md`](./protocols.md)
+**Protocol:** `arbitrage/v0.1` — part of the [`protocols.md`](https://protocols.md/) network
